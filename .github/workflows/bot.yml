@@ -1,0 +1,72 @@
+name: LazzuBot 24/7
+run-name: LazzuBot 24/7
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: lazzubuy-bot
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SELLER_USERNAME: ${{ secrets.SELLER_USERNAME }}
+          DONATION_ALERTS_URL: ${{ secrets.DONATION_ALERTS_URL }}
+          STARS_MESSAGE: ${{ secrets.STARS_MESSAGE }}
+          LOT_NAME: ${{ secrets.LOT_NAME }}
+          LOT_PRICE: ${{ secrets.LOT_PRICE }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          PC_API_URL: ${{ secrets.PC_API_URL }}
+          PC_API_TOKEN: ${{ secrets.PC_API_TOKEN }}
+          DONATION_WIDGET_TOKEN: ${{ secrets.DONATION_WIDGET_TOKEN }}
+          DONATION_ALERTS_TOKEN: ${{ secrets.DONATION_ALERTS_TOKEN }}
+          DONATION_REFRESH_TOKEN: ${{ secrets.DONATION_REFRESH_TOKEN }}
+          DONATION_CLIENT_ID: ${{ secrets.DONATION_CLIENT_ID }}
+          DONATION_CLIENT_SECRET: ${{ secrets.DONATION_CLIENT_SECRET }}
+          DONATION_MIN_AMOUNT: ${{ secrets.DONATION_MIN_AMOUNT }}
+          LICENSE_KEY: ${{ secrets.LICENSE_KEY }}
+          DB_PATH: bot_data.sqlite3
+          RUN_SECONDS: "21000"
+        run: python cloud_bot.py
+
+      - name: Save state
+        run: |
+          git config user.name "LazzuBot"
+          git config user.email "bot@users.noreply.github.com"
+          git add offset.txt bot_data.sqlite3 || true
+          if ! git diff --cached --quiet; then
+            git commit -m "bot state"
+            git push
+          fi
+
+      # Расписание GitHub часто не срабатывает, поэтому каждый удачный запуск
+      # сам запускает следующий. Получается непрерывная работа кусками по ~5,8 ч.
+      - name: Restart
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run bot.yml --repo ${{ github.repository }}
